@@ -59,6 +59,76 @@
 
 (require 'company)
 (global-company-mode t)
+;;lua
+;;;; This snippet enables lua-mode
+;; This line is not necessary, if lua-mode.el is already on your load-path
+
+(add-to-list 'exec-path "/usr/local/bin")
+
+(autoload 'lua-mode "lua-mode" "Lua editing mode." t)
+(add-to-list 'auto-mode-alist '("\\.lua$" . lua-mode))
+(add-to-list 'interpreter-mode-alist '("lua" . lua-mode))
+;;fennel
+(autoload 'fennel-mode "/home/aiden_user/.emacs.d/fennel-mode/fennel-mode.el" nil t)
+(add-to-list 'auto-mode-alist '("\\.fnl\\'" . fennel-mode))
+;;java
+(require 'lsp-java)
+(add-hook 'java-mode-hook #'lsp)
+
+(require 'cc-mode)
+
+(condition-case nil
+    (require 'use-package)
+  (file-error
+   (require 'package)
+   (add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/"))
+   (package-initialize)
+   (package-refresh-contents)
+   (package-install 'use-package)
+   (require 'use-package)))
+
+(use-package projectile :ensure t)
+(use-package yasnippet :ensure t)
+(use-package lsp-mode :ensure t)
+(use-package hydra :ensure t)
+(use-package company-lsp :ensure t)
+(use-package lsp-ui :ensure t)
+(use-package lsp-java :ensure t :after lsp
+  :config (add-hook 'java-mode-hook 'lsp))
+
+(use-package dap-mode
+  :ensure t :after lsp-mode
+  :config
+  (dap-mode t)
+  (dap-ui-mode t))
+
+(use-package dap-java :after (lsp-java))
+
+(require 'lsp-java-boot)
+
+(add-hook 'java-mode-hook #'lsp)
+(add-hook 'java-mode-hook 'flycheck-mode)
+(add-hook 'java-mode-hook 'company-mode)
+
+;; to enable the lenses
+(add-hook 'lsp-mode-hook #'lsp-lens-mode)
+(add-hook 'java-mode-hook #'lsp-java-boot-lens-mode)
+
+;;c++
+(add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-mode))
+(add-to-list 'auto-mode-alist '("\\.h\\'" . c++-mode))
+(add-hook 'c++-mode-hook 'irony-mode)
+(add-hook 'c-mode-hook 'irony-mode)
+(add-hook 'objc-mode-hook 'irony-mode)
+
+(defun my-irony-mode-hook ()
+  (define-key irony-mode-map ["TAB"] 
+      'irony-completion-at-point-async)
+    (define-key irony-mode-map ["TAB"]
+      'irony-completion-at-point-async))
+  (add-hook 'irony-mode-hook 'my-irony-mode-hook)
+(add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options)
+
 
 ;;clojure
 (unless (package-installed-p 'clojure-mode)
@@ -124,17 +194,14 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(custom-safe-themes
-   (quote
-    ("d91ef4e714f05fff2070da7ca452980999f5361209e679ee988e3c432df24347" "0598c6a29e13e7112cfbc2f523e31927ab7dce56ebb2016b567e1eff6dc1fd4f" default)))
+   '("d91ef4e714f05fff2070da7ca452980999f5361209e679ee988e3c432df24347" "0598c6a29e13e7112cfbc2f523e31927ab7dce56ebb2016b567e1eff6dc1fd4f" default))
  '(global-company-mode t)
  '(jdee-server-dir "/home/aiden_user/Documents/JdeeServer")
  '(package-selected-npackages
-   (quote
-    (which-key helm-cider geben-helm-projectile helm-company ac-cider cider clojure-mode paredit flycheck web-mode helm-swoop helm-projectile solarized-theme projectile magit helm)))
+   '(which-key helm-cider geben-helm-projectile helm-company ac-cider cider clojure-mode paredit flycheck web-mode helm-swoop helm-projectile solarized-theme projectile magit helm))
  '(package-selected-packages
-   (quote
-    (python-mode tern-context-coloring tern-auto-complete company-tern indium jdee latex-extra which-key web-mode solarized-theme rjsx-mode paredit magit helm-swoop helm-company helm-cider geben-helm-projectile flycheck add-node-modules-path ac-cider)))
- '(tls-checktrust (quote ask)))
+   '(fennel-mode lua-mode company-irony-c-headers flycheck-irony company-irony irony rtags dap-mode lsp-ui company-lsp lsp-java python-mode tern-context-coloring tern-auto-complete company-tern indium jdee latex-extra which-key web-mode solarized-theme rjsx-mode paredit magit helm-swoop helm-company helm-cider geben-helm-projectile flycheck add-node-modules-path ac-cider))
+ '(tls-checktrust 'ask t))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
