@@ -1,212 +1,496 @@
-;; .emacs --- My custom .emacs file
+;;; Personal configuration -*- lexical-binding: t -*-
 
-;;; Commentary:
-;;;;;; here's some commentary
+;;mac config setup
+(setq mac-command-modifier 'meta)
+(menu-bar-mode -1)
+(scroll-bar-mode -1)
+(tool-bar-mode -1)
 
-;;; Code:
-;; .emeacs -- Aidennn
-;n;package
-;;Add MELPA repository for packages
+ (defadvice text-scale-increase (around all-buffers (arg) activate)
+     (with-current-buffer ad-do-it))
+
+(global-display-line-numbers-mode)
+
+;; Add the NonGNU ELPA package archive
 (require 'package)
-(setq package-archives
-      '(("elpy" . "http://jorgenschaefer.github.io/packages/")
-        ("melpa" . "https://melpa.org/packages/")
-        ("gnu" . "http://elpa.gnu.org/packages/")
-        ("melpa-stable" . "https://stable.melpa.org/packages/")))
-(package-initialize)
-(setq tls-checktrust t)
-;;Deps
-;;helm
-(require 'helm)
-(global-set-key (kbd "M-x") 'helm-M-x)
-(global-set-key (kbd "M-x") #'helm-M-x)
-(global-set-key (kbd "C-x r b") #'helm-filtered-bookmarks)
-(global-set-key (kbd "C-x C-f") #'helm-find-files)
-;;helm tab complete
-(define-key helm-map (kbd "TAB") #'helm-execute-persistent-action)
-(define-key helm-map (kbd "<tab>") #'helm-execute-persistent-action)
-(define-key helm-map (kbd "C-z") #'helm-select-action)
-;;;;;;;;;;;;;;
-(helm-mode 1)
-;;helm projectile
-(require 'helm-projectile)
-(helm-projectile-on)
-;;(helm-projectile 1)
-;;(setq projectile-completion-system 'helm)
-;;helm-cider
-(require 'helm-cider)
-(helm-cider-mode 1)
-;;helm swoop
-(require 'helm-swoop)
-;; Change the keybinds to whatever you like :)
-(global-set-key (kbd "M-i") 'helm-swoop)
-;;projectile
-(require 'projectile)
-(define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
-(define-key projectile-mode-map (kbd "s-p") 'projectile-command-map)
-(projectile-mode 1)
-;;(projectile-mode +1)
-;;magit
-(require 'magit)
-;;Flycheck
-(require 'flycheck)
-;; Enable flycheck globally
-(global-flycheck-mode)
+(add-to-list 'package-archives  '("nongnu" . "https://elpa.nongnu.org/nongnu/"))
 
-;; regular auto-complete initialization
-(require 'auto-complete-config)
-(ac-config-default)
+(add-to-list 'package-archives
+             '("melpa-stable" . "https://stable.melpa.org/packages/") t)
 
-(require 'company)
-(global-company-mode t)
-;;lua
-;;;; This snippet enables lua-mode
-;; This line is not necessary, if lua-mode.el is already on your load-path
+;;;; might need to run the following on fresh install
+;; (package-refresh-contents)
 
-(add-to-list 'exec-path "/usr/local/bin")
+;; Load a custom theme
+(load-theme 'tango-dark t)
 
-(autoload 'lua-mode "lua-mode" "Lua editing mode." t)
-(add-to-list 'auto-mode-alist '("\\.lua$" . lua-mode))
-(add-to-list 'interpreter-mode-alist '("lua" . lua-mode))
-;;fennel
-(autoload 'fennel-mode "/home/aiden_user/.emacs.d/fennel-mode/fennel-mode.el" nil t)
-(add-to-list 'auto-mode-alist '("\\.fnl\\'" . fennel-mode))
-;;java
-(require 'lsp-java)
-(add-hook 'java-mode-hook #'lsp)
+;;; Completion framework
+(unless (package-installed-p 'vertico)
+  (package-install 'vertico))
 
-(require 'cc-mode)
+;; Enable completion by narrowing
+(vertico-mode t)
 
-(condition-case nil
-    (require 'use-package)
-  (file-error
-   (require 'package)
-   (add-to-list 'package-archives '("melpa" . "http://melpa.org/packages/"))
-   (package-initialize)
-   (package-refresh-contents)
-   (package-install 'use-package)
-   (require 'use-package)))
+(define-key vertico-map "?" #'minibuffer-completion-help)
+(define-key vertico-map (kbd "M-RET") #'minibuffer-force-complete-and-exit)
+(define-key vertico-map (kbd "M-TAB") #'minibuffer-complete)
 
-(use-package projectile :ensure t)
-(use-package yasnippet :ensure t)
-(use-package lsp-mode :ensure t)
-(use-package hydra :ensure t)
-(use-package company-lsp :ensure t)
-(use-package lsp-ui :ensure t)
-(use-package lsp-java :ensure t :after lsp
-  :config (add-hook 'java-mode-hook 'lsp))
+;; Less rigid completion
+(unless (package-installed-p 'orderless)
+  (package-install 'orderless))
 
-(use-package dap-mode
-  :ensure t :after lsp-mode
-  :config
-  (dap-mode t)
-  (dap-ui-mode t))
+(setq completion-styles '(orderless basic)
+      completion-category-defaults nil
+      completion-category-overrides '((file (styles partial-completion))))
 
-(use-package dap-java :after (lsp-java))
+(setq read-file-name-completion-ignore-case t
+      read-buffer-completion-ignore-case t
+      completion-ignore-case t)
 
-(require 'lsp-java-boot)
+;; Repeat previous vertico session
+(global-set-key "\M-R" #'vertico-repeat)
+(add-hook 'minibuffer-setup-hook #'vertico-repeat-save)
 
-(add-hook 'java-mode-hook #'lsp)
-(add-hook 'java-mode-hook 'flycheck-mode)
-(add-hook 'java-mode-hook 'company-mode)
+;; Enable nice vertico completion of things in buffer
+;; Use `consult-completion-in-region' if Vertico is enabled.
+;; Otherwise use the default `completion--in-region' function.
+(setq completion-in-region-function
+      (lambda (&rest args)
+        (apply (if vertico-mode
+                   #'consult-completion-in-region
+                 #'completion--in-region)
+               args)))
 
-;; to enable the lenses
-(add-hook 'lsp-mode-hook #'lsp-lens-mode)
-(add-hook 'java-mode-hook #'lsp-java-boot-lens-mode)
+;;;; Improve directory navigation
+(with-eval-after-load 'vertico
+  (define-key vertico-map "\r" #'vertico-directory-enter)
+  (define-key vertico-map "\d" #'vertico-directory-delete-char)
+  (define-key vertico-map "\M-\d" #'vertico-directory-delete-word)
+  (add-hook 'rfn-eshadow-update-overlay-hook #'vertico-directory-tidy))
 
-;;c++
-(add-to-list 'auto-mode-alist '("\\.cpp\\'" . c++-mode))
-(add-to-list 'auto-mode-alist '("\\.h\\'" . c++-mode))
-(add-hook 'c++-mode-hook 'irony-mode)
-(add-hook 'c-mode-hook 'irony-mode)
-(add-hook 'objc-mode-hook 'irony-mode)
+;; Vertico offers the vertico-multiform-mode which allows you to
+;; configure Vertico per command or per completion category. The
+;; vertico-buffer-mode enables a Helm-like buffer display, which takes
+;; more space but also displays more candidates. This verbose display
+;; mode is useful for commands like consult-imenu or consult-outline
+;; since the buffer display allows you to get a better overview over the
+;; entire current buffer. But for other commands you want to keep using
+;; the default Vertico display. vertico-multiform-mode solves this
+;; configuration problem!
 
-(defun my-irony-mode-hook ()
-  (define-key irony-mode-map ["TAB"] 
-      'irony-completion-at-point-async)
-    (define-key irony-mode-map ["TAB"]
-      'irony-completion-at-point-async))
-  (add-hook 'irony-mode-hook 'my-irony-mode-hook)
-(add-hook 'irony-mode-hook 'irony-cdb-autosetup-compile-options)
+;; Enable vertico-multiform
+(vertico-multiform-mode)
+
+;; Configure the display per command.
+;; Use a buffer with indices for imenu
+;; and a flat (Ido-like) menu for M-x.
+(setq vertico-multiform-commands
+      '((consult-imenu buffer indexed)
+        ;; (execute-extended-command unobtrusive)
+	))
+
+;; Configure the display per completion category.
+;; Use the grid display for files and a buffer
+;; for the consult-grep commands.
+(setq vertico-multiform-categories
+      '((file grid)
+        (consult-grep buffer)))
+;; Temporary toggling between the different display modes is
+;; possible. Bind the following commands:
+
+(define-key vertico-map "\M-V" #'vertico-multiform-vertical)
+(define-key vertico-map "\M-G" #'vertico-multiform-grid)
+(define-key vertico-map "\M-F" #'vertico-multiform-flat)
+(define-key vertico-map "\M-R" #'vertico-multiform-reverse)
+(define-key vertico-map "\M-U" #'vertico-multiform-unobtrusive)
+
+;; silver searcher ag
+(unless (package-installed-p 'ag)
+  (package-install 'ag
+		   ))
 
 
-;;clojure
+;;; Extended completion utilities
+(unless (package-installed-p 'consult)
+  (package-install 'consult))
+
+(require 'consult)
+
+(global-set-key [rebind switch-to-buffer] #'consult-buffer)
+(global-set-key (kbd "C-c j") #'consult-line)
+(global-set-key (kbd "C-c i") #'consult-imenu)
+(setq read-buffer-completion-ignore-case t
+      read-file-name-completion-ignore-case t
+      completion-ignore-case t)
+
+;; A safe recommendation is to leave automatic immediate previews
+;; enabled in general and disable the automatic preview only for
+;; commands, where the preview may be expensive due to file loading.
+(consult-customize
+ consult-ripgrep consult-git-grep consult-grep
+ consult-bookmark consult-recent-file consult-xref
+ consult--source-bookmark consult--source-recent-file
+ consult--source-project-recent-file
+ ;; :preview-key '(:debounce 0.2 any) ;; Option 1: Delay preview
+ :preview-key (kbd "M-."))            ;; Option 2: Manual preview
+
+;; In this case one may wonder what the difference is between using
+;; an Embark action on the current candidate in comparison to a
+;; manually triggered preview. The main difference is that the files
+;; opened by manual preview are closed again after the completion
+;; session. Furthermore during preview some functionality is
+;; disabled to improve the performance, see for example the
+;; customization variables consult-preview-allowed-hooks and
+;; consult-preview-variables. Files larger than
+;; consult-preview-raw-size are previewed literally without syntax
+;; highlighting and without changing the major mode. Delaying the
+;; preview is also useful for consult-theme, since the theme preview
+;; is slow. The delay results in a smoother UI experience.
+
+;; Preview on any key press, but delay 0.5s
+(consult-customize consult-theme :preview-key '(:debounce 0.5 any))
+;; Preview immediately on M-., on up/down after 0.5s, on any other key after 1s
+(consult-customize consult-theme
+                   :preview-key
+                   (list (kbd "M-.")
+                         :debounce 0.5 (kbd "<up>") (kbd "<down>")
+                         :debounce 1 'any))
+
+;;;;;;;;;;;;;;; SHOULD I INSTALL EMBARK AND EMBARK_CONSULT?
+;; (global-set-key (kbd "M-A") #'marginalia-cycle)  ;; this is already set above
+(global-set-key (kbd "C-c h") #'consult-history)
+(global-set-key (kbd "C-c m") #'consult-mode-command)
+(global-set-key (kbd "C-c k") #'consult-kmacro)
+;; C-x bindings (global-set-key (kbd ctl-x-map))
+(global-set-key (kbd "C-x M-:") #'consult-complex-command)     ;; orig. repeat-complex-command
+(global-set-key (kbd "C-x b") #'consult-buffer)                ;; orig. switch-to-buffer
+(global-set-key (kbd "C-x 4 b") #'consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+(global-set-key (kbd "C-x 5 b") #'consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+(global-set-key (kbd "C-x r b") #'consult-bookmark)            ;; orig. bookmark-jump
+(global-set-key (kbd "C-x p b") #'consult-project-buffer)      ;; orig. project-switch-to-buffer
+;; Custom M-# bindings for fast register access
+(global-set-key (kbd "M-#") #'consult-register-load)
+(global-set-key (kbd "M-'") #'consult-register-store)          ;; orig. abbrev-prefix-mark (global-set-key (kbd unrelated))
+(global-set-key (kbd "C-M-#") #'consult-register)
+;; Other custom bindings
+(global-set-key (kbd "M-y") #'consult-yank-pop)                ;; orig. yank-pop
+(global-set-key (kbd "<help> a") #'consult-apropos)            ;; orig. apropos-command
+;; M-g bindings (global-set-key (kbd goto-map))
+(global-set-key (kbd "M-g e") #'consult-compile-error)
+(global-set-key (kbd "M-g f") #'consult-flymake)               ;; Alternative: consult-flycheck
+(global-set-key (kbd "M-g g") #'consult-goto-line)             ;; orig. goto-line
+(global-set-key (kbd "M-g M-g") #'consult-goto-line)           ;; orig. goto-line
+(global-set-key (kbd "M-g o") #'consult-outline)               ;; Alternative: consult-org-heading
+(global-set-key (kbd "M-g m") #'consult-mark)
+(global-set-key (kbd "M-g k") #'consult-global-mark)
+(global-set-key (kbd "M-g i") #'consult-imenu)
+(global-set-key (kbd "M-g I") #'consult-imenu-multi)
+;; M-s bindings (search-map)
+(global-set-key (kbd "M-s d") #'consult-find)
+(global-set-key (kbd "M-s D") #'consult-locate)
+(global-set-key (kbd "M-s g") #'consult-grep)
+(global-set-key (kbd "M-s G") #'consult-git-grep)
+(global-set-key (kbd "M-s r") #'consult-ripgrep)
+(global-set-key (kbd "M-s l") #'consult-line)
+(global-set-key (kbd "M-s L") #'consult-line-multi)
+(global-set-key (kbd "M-s m") #'consult-multi-occur)
+(global-set-key (kbd "M-s k") #'consult-keep-lines)
+(global-set-key (kbd "M-s u") #'consult-focus-lines)
+
+;; Isearch integration
+(global-set-key (kbd "M-s e") #'consult-isearch-history)
+(define-key isearch-mode-map (kbd "M-e") #'consult-isearch-history)         ;; orig. isearch-edit-string
+(define-key isearch-mode-map (kbd "M-s e") #'consult-isearch-history)       ;; orig. isearch-edit-string
+(define-key isearch-mode-map (kbd "M-s l") #'consult-line)                  ;; needed by consult-line to detect isearch
+(define-key isearch-mode-map (kbd "M-s L") #'consult-line-multi)            ;; needed by consult-line to detect isearch
+
+;; Minibuffer history
+(define-key minibuffer-local-map (kbd "M-s") #'consult-history)                 ;; orig. next-matching-history-element
+(define-key minibuffer-local-map (kbd "M-r") #'consult-history)
+
+;; Enable automatic preview at point in the *Completions* buffer. This is
+;; relevant when you use the default completion UI.
+(add-hook 'completion-list-mode #'consult-preview-at-point-mode)
+
+;; Optionally configure the register formatting. This improves the register
+;; preview for `consult-register', `consult-register-load',
+;; `consult-register-store' and the Emacs built-ins.
+(setq register-preview-delay 0.5
+      register-preview-function #'consult-register-format)
+
+;; Optionally tweak the register preview window.
+;; This adds thin lines, sorting and hides the mode line of the window.
+(advice-add #'register-preview :override #'consult-register-window)
+
+;; Use Consult to select xref locations with preview
+(setq xref-show-xrefs-function #'consult-xref
+      xref-show-definitions-function #'consult-xref)
+
+;; Optionally configure preview. The default value
+;; is 'any, such that any key triggers the preview.
+;; (setq consult-preview-key 'any)
+;; (setq consult-preview-key (kbd "M-."))
+;; (setq consult-preview-key (list (kbd "<S-down>") (kbd "<S-up>")))
+;; For some commands and buffer sources it is useful to configure the
+;; :preview-key on a per-command basis using the `consult-customize' macro.
+(consult-customize
+ consult-theme
+ :preview-key '(:debounce 0.2 any)
+ consult-ripgrep consult-git-grep consult-grep
+ consult-bookmark consult-recent-file consult-xref
+ consult--source-bookmark consult--source-recent-file
+ consult--source-project-recent-file
+ :preview-key (kbd "M-."))
+
+;; Optionally configure the narrowing key.
+;; Both < and C-+ work reasonably well.
+(setq consult-narrow-key "<") ;; (kbd "C-+")
+
+;; Optionally make narrowing help available in the minibuffer.
+;; You may want to use `embark-prefix-help-command' or which-key instead.
+;; (define-key consult-narrow-map (vconcat consult-narrow-key "?") #'consult-narrow-help)
+
+;; By default `consult-project-function' uses `project-root' from project.el.
+;; Optionally configure a different project root function.
+;; There are multiple reasonable alternatives to chose from.
+  ;;;; 1. project.el (the default)
+;; (setq consult-project-function #'consult--default-project--function)
+  ;;;; 2. projectile.el (projectile-project-root)
+;; (autoload 'projectile-project-root "projectile")
+;; (setq consult-project-function (lambda (_) (projectile-project-root)))
+  ;;;; 3. vc.el (vc-root-dir)
+;; (setq consult-project-function (lambda (_) (vc-root-dir)))
+  ;;;; 4. locate-dominating-file
+;; (setq consult-project-function (lambda (_) (locate-dominating-file "." ".git")))
+
+(unless (package-installed-p 'marginalia)
+  (package-install 'marginalia))
+
+(marginalia-mode)
+;; (define-key minibuffer-local-map "\M-A" #'marginalia-cycle)
+(global-set-key (kbd "M-A") #'marginalia-cycle)
+
+;;;;;;;;;;;;;;;;; Embark and Embark Consult
+(unless (package-installed-p 'embark)
+  (package-install 'embark))
+
+(require 'embark)
+(global-set-key (kbd "C-.") #'embark-act)         ;; pick some comfortable binding
+(global-set-key (kbd "C-;") #'embark-dwim)        ;; good alternative: M-.
+(global-set-key (kbd "C-h B") #'embark-bindings) ;; alternative for `describe-bindings'
+
+;; Optionally replace the key help with a completing-read interface
+(setq prefix-help-command #'embark-prefix-help-command)
+
+;; Hide the mode line of the Embark live/completions buffers
+(add-to-list 'display-buffer-alist
+             '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+               nil
+               (window-parameters (mode-line-format . none))))
+
+;; Consult users will also want the embark-consult package.
+(unless (package-installed-p 'embark-consult)
+  (package-install 'embark-consult))
+
+(require 'embark-consult)
+(add-hook 'embark-collect-mode #'consult-preview-at-point-mode)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;for ruby dev I use solargraph for LSP ***needs to be installed separately***
+
+(unless (package-installed-p 'inf-ruby)
+  (package-install 'inf-ruby))
+
+(autoload 'inf-ruby-minor-mode "inf-ruby" "Run an inferior Ruby process" t)
+(add-hook 'ruby-mode-hook 'inf-ruby-minor-mode)
+
+(add-hook 'compilation-filter-hook 'inf-ruby-auto-enter)
+
+;; Automatically pair parentheses
+(electric-pair-mode t)
+
+;;; LSP Support
+;; (unless (package-installed-p 'eglot)
+;;   (package-install 'eglot))
+
+;; (require 'eglot)
+;; ;; Enable LSP support by default in programming buffers that support it
+;; (defun aiden-ensure-eglot-if-supported ()
+;;   (unless (eq 'emacs-lisp-mode major-mode)
+;;     (eglot-ensure)))
+
+;; (add-hook 'prog-mode-hook #'aiden-ensure-eglot-if-supported)
+;; (add-to-list 'eglot-server-programs '(clojure-mode . ("clojure-lsp")))
+
+;;; Inline static analysis
+
+;; Enabled inline static analysis
+(add-hook 'prog-mode-hook #'flymake-mode)
+
+;; Display messages when idle, without prompting
+(setq help-at-pt-display-when-idle t)
+
+;; Message navigation bindings
+(with-eval-after-load 'flymake
+  (define-key flymake-mode-map (kbd "C-c n") #'flymake-goto-next-error)
+  (define-key flymake-mode-map (kbd "C-c p") #'flymake-goto-prev-error))
+
+;;; Git client
+(unless (package-installed-p 'magit)
+  (package-install 'magit))
+
+;; Bind the `magit-status' command to a convenient key.
+(global-set-key (kbd "C-c g") #'magit-status)
+
+;; Show word-granularity differences within diff hunks
+(setq magit-diff-refine-hunk t)
+
+;;; Indication of local VCS changes
+(unless (package-installed-p 'diff-hl)
+  (package-install 'diff-hl))
+
+;; Enable `diff-hl' support by default in programming buffers
+(add-hook 'prog-mode-hook #'diff-hl-mode)
+
+;;; Clojure Support
 (unless (package-installed-p 'clojure-mode)
   (package-install 'clojure-mode))
-;; paredit
-  (autoload 'enable-paredit-mode "paredit" "Turn on pseudo-structural editing of Lisp code." t)
-    (add-hook 'emacs-lisp-mode-hook    #'enable-paredit-mode)
-    (add-hook 'eval-expression-minibuffer-setup-hook #'enable-paredit-mode)
-    (add-hook 'ielm-mode-hook             #'enable-paredit-mode)
-    (add-hook 'lisp-mode-hook             #'enable-paredit-mode)
-    (add-hook 'lisp-interaction-mode-hook #'enable-paredit-mode)
-(add-hook 'scheme-mode-hook           #'enable-paredit-mode)
-(add-hook 'clojure-mode-hook #'paredit-mode)
-;;ac-cider
-(require 'ac-cider)
-(add-hook 'cider-mode-hook 'ac-flyspell-workaround)
-(add-hook 'cider-mode-hook 'ac-cider-setup)
-(add-hook 'cider-repl-mode-hook 'ac-cider-setup)
-(eval-after-load "auto-complete"
-    '(add-to-list 'ac-modes 'cider-mode))
-;;which-key
-(require 'which-key)
-(which-key-mode)
-;;webmode
-(require 'web-mode)
-(add-to-list 'auto-mode-alist '("\\.phtml\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.tpl\\.php\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.[agj]sp\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.as[cp]x\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.djhtml\\'" . web-mode))
-(setq web-mode-ac-sources-alist
-  '(("css" . (ac-source-css-property))
-    ("html" . (ac-source-words-in-buffer ac-source-abbrev))))
-;; indium
-(unless (package-installed-p 'indium)
-  (package-install 'indium))
-;;term
-(add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
-(require 'company)
-(require 'company-tern)
 
-(add-to-list 'company-backends 'company-tern)
-(add-hook 'js2-mode-hook (lambda ()
-                           (tern-mode)
-                           (company-mode)))
-                           
-;; Disable completion keybindings, as we use xref-js2 instead
-(define-key tern-mode-keymap (kbd "M-.") nil)
-(define-key tern-mode-keymap (kbd "M-,") nil)
-;;customizations
-(tool-bar-mode -1)
-(menu-bar-mode -1)
-(global-set-key (kbd "C-c t") 'eshell )
-;;theme
-(load-theme 'solarized-dark t)
+(unless (package-installed-p 'cider)
+  (package-install 'cider))
 
-;;auto
+;;; C# Support
+(unless (package-installed-p 'csharp-mode)
+  (package-install 'csharp-mode))
+
+;;; Go Support
+(unless (package-installed-p 'go-mode)
+  (package-install 'go-mode))
+
+;;; Haskell Support
+(unless (package-installed-p 'haskell-mode)
+  (package-install 'haskell-mode))
+
+;;; JSON Support
+(unless (package-installed-p 'json-mode)
+  (package-install 'json-mode))
+
+;;; PHP Support
+(unless (package-installed-p 'php-mode)
+  (package-install 'php-mode))
+
+;;; Rust Support
+(unless (package-installed-p 'rust-mode)
+  (package-install 'rust-mode))
+
+;;; Typescript Support
+(unless (package-installed-p 'typescript-mode)
+  (package-install 'typescript-mode))
+
+;;; Docker Tramp Support
+(unless (package-installed-p 'docker-tramp)
+  (package-install 'docker-tramp))
+
+;;; YAML Support
+(unless (package-installed-p 'yaml-mode)
+  (package-install 'yaml-mode))
+
+;;; LaTeX support
+(unless (package-installed-p 'auctex)
+  (package-install 'auctex))
+(setq TeX-auto-save t)
+(setq TeX-parse-self t)
+(setq-default TeX-master nil)
+
+;; Enable LaTeX math support
+(add-hook 'LaTeX-mode-map #'LaTeX-math-mode)
+
+;; Enable reference mangment
+(add-hook 'LaTeX-mode-map #'reftex-mode)
+
+;;; Markdown support
+(unless (package-installed-p 'markdown-mode)
+  (package-install 'markdown-mode))
+
+;;; Outline-based notes management and organizer
+(global-set-key (kbd "C-c l") #'org-store-link)
+(global-set-key (kbd "C-c a") #'org-agenda)
+
+;;; EditorConfig support
+(unless (package-installed-p 'editorconfig)
+  (package-install 'editorconfig))
+
+;; Enable EditorConfig
+(editorconfig-mode t)
+
+;;; Jump to arbitrary positions
+(unless (package-installed-p 'avy)
+  (package-install 'avy))
+(global-set-key (kbd "C-c z") #'avy-goto-word-1)
+
+;; Jump to any open window or frame
+(setq avy-all-windows 'all-frames)
+
+;; emacs-bash-completion # this isn't in elpa
+;;(add-to-list 'load-path "~/.emacs.d/emacs-bash-completion/")
+;;(require 'bash-completion)
+;;(bash-completion-setup)
+
+;;; one way to enable eshell completion (from readme in repo)
+;; (defun bash-completion-from-eshell ()
+;;   (interactive)
+;;   (let ((completion-at-point-functions
+;;          '(bash-completion-eshell-capf)))
+;;     (completion-at-point)))
+
+;; (defun bash-completion-eshell-capf ()
+;;   (bash-completion-dynamic-complete-nocomint
+;;    (save-excursion (eshell-bol) (point))
+;;    (point) t))
+
+;; Backup file location
+;; backup in one place. flat, no tree structure
+(setq backup-directory-alist '(("" . "~/.emacs.d/backup")))
+
+;; Miscellaneous options
+(setq-default major-mode
+              (lambda () ; guess major mode from file name
+                (unless buffer-file-name
+                  (let ((buffer-file-name (buffer-name)))
+                    (set-auto-mode)))))
+(setq confirm-kill-emacs #'yes-or-no-p)
+(setq window-resize-pixelwise t)
+(setq frame-resize-pixelwise t)
+
+(global-set-key (kbd "C-x 4 s") #'window-swap-states)
+
+;; preserve cider repl commands
+(setq cider-repl-history-file "~/.emacs.d/.cider-repl-hist")
+
+(save-place-mode t)
+(savehist-mode t)
+(recentf-mode t)
+(defalias 'yes-or-no #'y-or-n-p)
+
+(setq ring-bell-function 'ignore)
+(setq enable-recursive-minibuffers t)
+
+(desktop-save-mode t)
+
+;; Store automatic customisation options elsewhere
+(setq custom-file (locate-user-emacs-file "custom.el"))
+(when (file-exists-p custom-file)
+  (load custom-file))
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(custom-safe-themes
-   '("d91ef4e714f05fff2070da7ca452980999f5361209e679ee988e3c432df24347" "0598c6a29e13e7112cfbc2f523e31927ab7dce56ebb2016b567e1eff6dc1fd4f" default))
- '(global-company-mode t)
- '(jdee-server-dir "/home/aiden_user/Documents/JdeeServer")
- '(package-selected-npackages
-   '(which-key helm-cider geben-helm-projectile helm-company ac-cider cider clojure-mode paredit flycheck web-mode helm-swoop helm-projectile solarized-theme projectile magit helm))
  '(package-selected-packages
-   '(fennel-mode lua-mode company-irony-c-headers flycheck-irony company-irony irony rtags dap-mode lsp-ui company-lsp lsp-java python-mode tern-context-coloring tern-auto-complete company-tern indium jdee latex-extra which-key web-mode solarized-theme rjsx-mode paredit magit helm-swoop helm-company helm-cider geben-helm-projectile flycheck add-node-modules-path ac-cider))
- '(tls-checktrust 'ask t))
+   '(avy editorconfig markdown-mode auctex yaml-mode typescript-mode rust-mode php-mode json-mode haskell-mode go-mode csharp-mode cider clojure-mode diff-hl magit eglot inf-ruby embark-consult embark marginalia consult orderless vertico)))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
-(provide 'init)
-;;; init ends here
